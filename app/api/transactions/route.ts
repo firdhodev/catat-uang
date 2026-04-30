@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
       platform: body.platform || '',
       source: 'manual',
       is_verified: true,
+      ai_confidence: body.ai_confidence || null,
+      receipt_url: body.receipt_url || null,
+      notes: body.notes || null,
       transaction_date: body.transaction_date || new Date().toISOString(),
     })
     .select()

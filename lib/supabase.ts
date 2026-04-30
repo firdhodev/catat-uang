@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Fallback placeholder mencegah error saat build-time static analysis
+export const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder-key'
+);
 
 // Types
 export interface Transaction {
@@ -17,6 +18,8 @@ export interface Transaction {
   source_email_id?: string;
   ai_confidence?: number;
   is_verified: boolean;
+  receipt_url?: string;
+  notes?: string;
   transaction_date: string;
   created_at: string;
 }
