@@ -262,7 +262,7 @@ export default function DashboardPage() {
                     <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatRupiah(v)} />
+                <Tooltip formatter={(v) => typeof v === 'number' ? formatRupiah(v) : v} />
                 <Legend
                   formatter={(v) => <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{v}</span>}
                 />

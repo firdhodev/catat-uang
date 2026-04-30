@@ -29,8 +29,8 @@ export default function ManualInputPage() {
   const [platforms, setPlatforms] = useState<{ name: string }[]>([]);
   const [recentInputs, setRecentInputs] = useState<{ amount: number; type: string; category: string; description: string; platform: string; transaction_date: string }[]>([]);
 
-  const showToast = (msg: string, t = 'success') => {
-    setToast({ msg, t } as { msg: string; type: string });
+  const showToast = (msg: string, type = 'success') => {
+    setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -101,7 +101,7 @@ export default function ManualInputPage() {
     <div className="page-container">
       {toast && (
         <div className="toast-container">
-          <div className={`toast toast-${(toast as { msg: string; type: string }).type}`}>{toast.msg}</div>
+          <div className={`toast toast-${toast.type}`}>{toast.msg}</div>
         </div>
       )}
 
