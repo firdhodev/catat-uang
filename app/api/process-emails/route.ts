@@ -5,15 +5,28 @@ import { parseEmailWithAI } from '@/lib/ai';
 // POST /api/process-emails - proses pending emails dengan AI
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const limit = body.limit || 10; // proses max 10 email per request
+  const limit = body.limit || 10;
+  const specificId = body.id || null; // opsional: proses 1 email by ID
 
-  // Ambil email yang pending
-  const { data: pendingEmails, error: fetchError } = await supabase
+  // Query builder
+  let query = supabase
     .from('pending_emails')
     .select('*')
     .eq('status', 'pending')
     .order('received_at', { ascending: true })
     .limit(limit);
+
+  // Jika ada ID spesifik, filter hanya email itu
+  if (specificId) {
+    query = supabase
+      .from('pending_emails')
+      .select('*')
+      .eq('id', specificId)
+      .eq('status', 'pending')
+      .limit(1);
+  }
+
+  const { data: pendingEmails, error: fetchError } = await query;
 
   if (fetchError) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 });

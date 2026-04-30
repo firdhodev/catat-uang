@@ -30,9 +30,16 @@ export default function PendingPage() {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [processing, setProcessing] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<PendingEmail | null>(null);
   const [processResult, setProcessResult] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+
+  const showToast = (msg: string, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchEmails = useCallback(async () => {
     setLoading(true);
@@ -47,6 +54,7 @@ export default function PendingPage() {
 
   useEffect(() => { fetchEmails(); }, [fetchEmails]);
 
+  // Proses SEMUA
   const handleProcessAll = async () => {
     setProcessing(true);
     setProcessResult(null);
@@ -66,6 +74,61 @@ export default function PendingPage() {
     }
   };
 
+  // Proses SATU email
+  const handleProcessOne = async (email: PendingEmail) => {
+    setProcessingId(email.id);
+    try {
+      // Tandai hanya email ini sebagai pending, skip yang lain sementara
+      const res = await fetch('/api/process-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 1, id: email.id }),
+      });
+      const data = await res.json();
+      if (data.processed > 0) {
+        showToast('✅ Email berhasil diproses AI!');
+      } else {
+        showToast('❌ Gagal diproses: ' + (data.details?.[0]?.message || 'error'), 'error');
+      }
+      fetchEmails();
+    } catch {
+      showToast('❌ Gagal memproses', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Hapus (skip) email
+  const handleDelete = async (email: PendingEmail) => {
+    if (!confirm(`Hapus email "${email.subject || 'tanpa subject'}" dari antrian? Email ini tidak akan diproses.`)) return;
+    setDeletingId(email.id);
+    try {
+      await fetch(`/api/pending-emails/${email.id}`, { method: 'DELETE' });
+      showToast('🗑️ Email dihapus dari antrian');
+      fetchEmails();
+      if (selectedEmail?.id === email.id) setSelectedEmail(null);
+    } catch {
+      showToast('❌ Gagal menghapus', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Skip (tandai ignored, tidak dihapus)
+  const handleSkip = async (email: PendingEmail) => {
+    try {
+      await fetch(`/api/pending-emails/${email.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'skipped', error_message: 'Dilewati manual' }),
+      });
+      showToast('⏭️ Email dilewati');
+      fetchEmails();
+    } catch {
+      showToast('❌ Gagal', 'error');
+    }
+  };
+
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       pending: 'badge-pending',
@@ -79,7 +142,14 @@ export default function PendingPage() {
 
   return (
     <div className="page-container">
-      {/* Body preview modal */}
+      {/* Toast */}
+      {toast && (
+        <div className="toast-container">
+          <div className={`toast toast-${toast.type}`}>{toast.msg}</div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
       {selectedEmail && (
         <div className="modal-overlay" onClick={() => setSelectedEmail(null)}>
           <div className="modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
@@ -87,40 +157,67 @@ export default function PendingPage() {
               <div className="modal-title">📬 Detail Email</div>
               <button className="modal-close" onClick={() => setSelectedEmail(null)}>×</button>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Subject</div>
-              <div style={{ fontWeight: 600 }}>{selectedEmail.subject || '(tanpa subject)'}</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Subject</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedEmail.subject || '(tanpa subject)'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Platform</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedEmail.platform_name || '-'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Status</div>
+                {statusBadge(selectedEmail.status)}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Diterima</div>
+                <div style={{ fontSize: 13 }}>{selectedEmail.received_at ? formatDate(selectedEmail.received_at) : '-'}</div>
+              </div>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Platform</div>
-              <div>{selectedEmail.platform_name || '-'}</div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Status</div>
-              {statusBadge(selectedEmail.status)}
-              {selectedEmail.error_message && (
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--expense)' }}>
-                  Error: {selectedEmail.error_message}
-                </div>
-              )}
-            </div>
-            <div>
+
+            {selectedEmail.error_message && (
+              <div className="alert alert-warning" style={{ marginBottom: 16 }}>
+                ⚠️ {selectedEmail.error_message}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Isi Email</div>
               <pre style={{
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: 16,
-                fontSize: 12,
-                color: 'var(--text-secondary)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                maxHeight: 300,
-                overflow: 'auto',
+                borderRadius: 8, padding: 16, fontSize: 12,
+                color: 'var(--text-secondary)', whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word', maxHeight: 300, overflow: 'auto',
               }}>
                 {selectedEmail.body}
               </pre>
             </div>
+
+            {/* Aksi di modal */}
+            {selectedEmail.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary"
+                  onClick={() => { handleSkip(selectedEmail); setSelectedEmail(null); }}>
+                  ⏭️ Lewati
+                </button>
+                <button className="btn btn-secondary"
+                  style={{ color: 'var(--expense)' }}
+                  onClick={() => handleDelete(selectedEmail)}
+                  disabled={deletingId === selectedEmail.id}>
+                  🗑️ Hapus
+                </button>
+                <button className="btn btn-primary"
+                  onClick={() => handleProcessOne(selectedEmail)}
+                  disabled={processingId === selectedEmail.id}>
+                  {processingId === selectedEmail.id
+                    ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Memproses...</>
+                    : '🤖 Proses dengan AI'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -138,7 +235,9 @@ export default function PendingPage() {
             disabled={processing || total === 0}
             id="btn-process-all"
           >
-            {processing ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Memproses...</> : '🤖 Proses Semua dengan AI'}
+            {processing
+              ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Memproses...</>
+              : '🤖 Proses Semua dengan AI'}
           </button>
           <button className="btn btn-secondary" onClick={fetchEmails} id="btn-refresh">
             🔄 Refresh
@@ -152,9 +251,8 @@ export default function PendingPage() {
         </div>
       )}
 
-      {/* Info box */}
       <div className="alert alert-info" style={{ marginBottom: 24 }}>
-        💡 <strong>Cara kerja:</strong> Klik "Proses Semua dengan AI" untuk menganalisa email yang dikirim dari Google Apps Script secara otomatis. AI akan mengekstrak nominal, kategori, dan deskripsi transaksi.
+        💡 <strong>Cara kerja:</strong> Klik <strong>"🤖 Proses dengan AI"</strong> per baris untuk memilih email mana yang diproses. Gunakan <strong>"⏭️ Lewati"</strong> untuk skip, atau <strong>"🗑️ Hapus"</strong> untuk hapus dari antrian.
       </div>
 
       {/* Table */}
@@ -191,21 +289,64 @@ export default function PendingPage() {
                     <td>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>{email.platform_name || '-'}</span>
                     </td>
-                    <td style={{ maxWidth: 200 }}>
+                    <td style={{ maxWidth: 180 }}>
                       <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {email.subject || '(tanpa subject)'}
                       </div>
                     </td>
-                    <td style={{ maxWidth: 250 }}>
+                    <td style={{ maxWidth: 220 }}>
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {truncate(email.body.replace(/\s+/g, ' '), 80)}
+                        {truncate(email.body.replace(/\s+/g, ' '), 70)}
                       </span>
                     </td>
                     <td>{statusBadge(email.status)}</td>
                     <td>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setSelectedEmail(email)}>
-                        👁️ Lihat
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {/* Lihat detail */}
+                        <button className="btn btn-secondary btn-sm" onClick={() => setSelectedEmail(email)}
+                          title="Lihat detail email">
+                          👁️
+                        </button>
+
+                        {email.status === 'pending' && (
+                          <>
+                            {/* Proses satu */}
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => handleProcessOne(email)}
+                              disabled={processingId === email.id}
+                              title="Proses email ini dengan AI"
+                            >
+                              {processingId === email.id
+                                ? <span className="spinner" style={{ width: 12, height: 12 }} />
+                                : '🤖'}
+                            </button>
+
+                            {/* Lewati */}
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleSkip(email)}
+                              title="Lewati (tidak diproses)"
+                              style={{ fontSize: 13 }}
+                            >
+                              ⏭️
+                            </button>
+
+                            {/* Hapus */}
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleDelete(email)}
+                              disabled={deletingId === email.id}
+                              title="Hapus dari antrian"
+                              style={{ color: 'var(--expense)', fontSize: 13 }}
+                            >
+                              {deletingId === email.id
+                                ? <span className="spinner" style={{ width: 12, height: 12 }} />
+                                : '🗑️'}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -215,7 +356,7 @@ export default function PendingPage() {
         )}
       </div>
 
-      {/* Apps Script setup info */}
+      {/* Apps Script info */}
       <div className="card" style={{ marginTop: 24 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>📋 Setup Google Apps Script</div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8 }}>

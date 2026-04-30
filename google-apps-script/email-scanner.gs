@@ -16,35 +16,9 @@
 const CONFIG = {
   SUPABASE_URL: 'https://your-project.supabase.co',  // ← ganti ini
   SUPABASE_KEY: 'your-anon-key-here',                // ← ganti ini
-  SCAN_INTERVAL_HOURS: 0.25,  // scan setiap 15 menit
   MAX_EMAILS_PER_RUN: 20,     // maks email per eksekusi
   DAYS_BACK: 1,               // scan email N hari terakhir
 };
-
-// ============================================================
-// DAFTAR SENDER EMAIL YANG DIPANTAU
-// Sesuaikan dengan bank/ewallet yang kamu pakai
-// ============================================================
-const MONITORED_SENDERS = [
-  // Bank
-  'notifikasi@bca.co.id',
-  'notifikasi@bankmandiri.co.id',
-  'notif@bni.co.id',
-  'info@bri.co.id',
-  'hello@jenius.com',
-  'noreply@seabank.co.id',
-
-  // E-Wallet
-  'noreply@gojek.com',
-  'no-reply@ovo.id',
-  'noreply@dana.id',
-  'no-reply@shopee.co.id',
-  'noreply@flip.id',
-
-  // PayLater
-  'notification@akulaku.com',
-  'noreply@kredivo.com',
-];
 
 // ============================================================
 // KEYWORDS YANG MENANDAKAN EMAIL ADALAH TRANSAKSI KEUANGAN
@@ -64,11 +38,46 @@ const TRANSACTION_KEYWORDS = [
 ];
 
 // ============================================================
+// AMBIL DAFTAR PLATFORM DARI SUPABASE (dinamis dari Settings)
+// ============================================================
+function getActivePlatforms() {
+  try {
+    const response = UrlFetchApp.fetch(
+      CONFIG.SUPABASE_URL + '/rest/v1/financial_platforms?is_active=eq.true&select=name,email_sender,email_keywords',
+      {
+        headers: {
+          'apikey': CONFIG.SUPABASE_KEY,
+          'Authorization': 'Bearer ' + CONFIG.SUPABASE_KEY,
+        },
+        muteHttpExceptions: true,
+      }
+    );
+
+    if (response.getResponseCode() === 200) {
+      const platforms = JSON.parse(response.getContentText());
+      Logger.log('Platform aktif ditemukan: ' + platforms.length);
+      return platforms.filter(p => p.email_sender); // hanya yang punya email sender
+    }
+  } catch (e) {
+    Logger.log('Gagal ambil platform dari Supabase: ' + e.message);
+  }
+  return [];
+}
+
+// ============================================================
 // FUNGSI UTAMA — Dipanggil otomatis oleh trigger
 // ============================================================
 function scanEmails() {
   Logger.log('=== Smart Money Tracker - Email Scan Start ===');
   Logger.log('Time: ' + new Date().toISOString());
+
+  // Ambil platform aktif dari Supabase (bukan hardcoded)
+  const platforms = getActivePlatforms();
+
+  if (platforms.length === 0) {
+    Logger.log('⚠️ Tidak ada platform aktif dengan email sender. Tambahkan di Settings web app.');
+    return;
+  }
 
   const processedIds = getProcessedEmailIds();
   let scanned = 0;
@@ -76,11 +85,14 @@ function scanEmails() {
   let skipped = 0;
 
   try {
-    for (const sender of MONITORED_SENDERS) {
+    for (const platform of platforms) {
       if (scanned >= CONFIG.MAX_EMAILS_PER_RUN) break;
 
+      const sender = platform.email_sender;
       const query = `from:(${sender}) newer_than:${CONFIG.DAYS_BACK}d`;
       const threads = GmailApp.search(query, 0, 5);
+
+      Logger.log(`Scanning: ${platform.name} (${sender}) → ${threads.length} thread`);
 
       for (const thread of threads) {
         const messages = thread.getMessages();
@@ -98,34 +110,34 @@ function scanEmails() {
           const subject = msg.getSubject();
           const body = msg.getPlainBody();
 
-          // Cek apakah ini email transaksi
-          if (!isTransactionEmail(subject, body)) {
+          // Cek apakah ini email transaksi (gunakan keywords dari platform atau global)
+          const platformKeywords = platform.email_keywords || [];
+          if (!isTransactionEmail(subject, body, platformKeywords)) {
             Logger.log('Bukan transaksi, skip: ' + subject);
             skipped++;
-            markAsProcessed(msgId, 'skipped');
+            markAsProcessed(msgId);
             continue;
           }
 
           // Push ke Supabase
-          const platformName = detectPlatformName(sender);
           const success = pushToSupabase({
             gmail_message_id: msgId,
-            platform_name: platformName,
+            platform_name: platform.name,
             subject: subject,
-            body: truncateText(body, 5000), // batasi 5000 char
+            body: truncateText(body, 5000),
             received_at: msg.getDate().toISOString(),
           });
 
           if (success) {
             pushed++;
-            markAsProcessed(msgId, 'pushed');
-            Logger.log('✅ Pushed: ' + subject + ' | Platform: ' + platformName);
+            markAsProcessed(msgId);
+            Logger.log('✅ Pushed: ' + subject + ' | Platform: ' + platform.name);
           } else {
             Logger.log('❌ Failed to push: ' + subject);
           }
 
           scanned++;
-          Utilities.sleep(500); // jeda 500ms antar request
+          Utilities.sleep(300);
         }
       }
     }
@@ -139,41 +151,24 @@ function scanEmails() {
 
 // ============================================================
 // CEK APAKAH EMAIL ADALAH TRANSAKSI KEUANGAN
+// Cek platform keywords dulu, fallback ke global keywords
 // ============================================================
-function isTransactionEmail(subject, body) {
+function isTransactionEmail(subject, body, platformKeywords) {
   const combined = (subject + ' ' + body).toLowerCase();
-  for (const keyword of TRANSACTION_KEYWORDS) {
-    if (combined.includes(keyword.toLowerCase())) {
-      return true;
+
+  // Cek platform-specific keywords dulu (lebih spesifik)
+  if (platformKeywords && platformKeywords.length > 0) {
+    for (const keyword of platformKeywords) {
+      if (combined.includes(keyword.toLowerCase())) return true;
     }
   }
-  return false;
-}
 
-// ============================================================
-// DETEKSI NAMA PLATFORM DARI SENDER EMAIL
-// ============================================================
-function detectPlatformName(senderEmail) {
-  const platformMap = {
-    'bca.co.id': 'BCA',
-    'bankmandiri.co.id': 'Mandiri',
-    'bni.co.id': 'BNI',
-    'bri.co.id': 'BRI',
-    'jenius.com': 'Jenius',
-    'seabank.co.id': 'SeaBank',
-    'gojek.com': 'GoPay',
-    'ovo.id': 'OVO',
-    'dana.id': 'DANA',
-    'shopee.co.id': 'ShopeePay',
-    'flip.id': 'Flip',
-    'akulaku.com': 'Akulaku',
-    'kredivo.com': 'Kredivo',
-  };
-
-  for (const [domain, name] of Object.entries(platformMap)) {
-    if (senderEmail.includes(domain)) return name;
+  // Fallback ke global keywords
+  for (const keyword of TRANSACTION_KEYWORDS) {
+    if (combined.includes(keyword.toLowerCase())) return true;
   }
-  return senderEmail;
+
+  return false;
 }
 
 // ============================================================
@@ -213,13 +208,11 @@ function getProcessedEmailIds() {
   return new Set(JSON.parse(raw));
 }
 
-function markAsProcessed(msgId, status) {
+function markAsProcessed(msgId) {
   const props = PropertiesService.getScriptProperties();
   const raw = props.getProperty('processed_ids') || '[]';
   const ids = JSON.parse(raw);
   ids.push(msgId);
-
-  // Simpan max 500 ID terakhir
   const trimmed = ids.slice(-500);
   props.setProperty('processed_ids', JSON.stringify(trimmed));
 }
@@ -233,7 +226,6 @@ function truncateText(text, maxLen) {
 // SETUP TIME TRIGGER (jalankan SEKALI dari GAS Editor)
 // ============================================================
 function setupTrigger() {
-  // Hapus trigger lama jika ada
   const triggers = ScriptApp.getProjectTriggers();
   for (const trigger of triggers) {
     if (trigger.getHandlerFunction() === 'scanEmails') {
@@ -241,18 +233,16 @@ function setupTrigger() {
     }
   }
 
-  // Buat trigger baru setiap 15 menit
   ScriptApp.newTrigger('scanEmails')
     .timeBased()
     .everyMinutes(15)
     .create();
 
   Logger.log('✅ Trigger berhasil dipasang! Scan setiap 15 menit.');
-  Logger.log('Kamu bisa jalankan scanEmails() sekarang untuk test pertama kali.');
 }
 
 // ============================================================
-// HAPUS SEMUA TRIGGER (untuk reset)
+// HAPUS SEMUA TRIGGER
 // ============================================================
 function removeTriggers() {
   const triggers = ScriptApp.getProjectTriggers();
@@ -281,20 +271,20 @@ function testSupabaseConnection() {
 }
 
 // ============================================================
-// TEST — Scan manual untuk 1 sender tertentu
+// TEST — Lihat platform aktif dari Supabase
 // ============================================================
-function testScanSingleSender() {
-  const testSender = 'noreply@gojek.com'; // ubah sesuai kebutuhan
-  const query = `from:(${testSender}) newer_than:7d`;
-  const threads = GmailApp.search(query, 0, 3);
+function testGetPlatforms() {
+  const platforms = getActivePlatforms();
+  Logger.log('Total platform aktif: ' + platforms.length);
+  platforms.forEach(p => {
+    Logger.log(`- ${p.name}: ${p.email_sender}`);
+  });
+}
 
-  Logger.log(`Mencari email dari: ${testSender}`);
-  Logger.log(`Ditemukan ${threads.length} thread`);
-
-  for (const thread of threads) {
-    const msg = thread.getMessages()[0];
-    Logger.log('Subject: ' + msg.getSubject());
-    Logger.log('Is transaction: ' + isTransactionEmail(msg.getSubject(), msg.getPlainBody()));
-    Logger.log('---');
-  }
+// ============================================================
+// TEST — Scan manual sekarang (tanpa nunggu 15 menit)
+// ============================================================
+function testManualScan() {
+  Logger.log('=== Manual Scan Test ===');
+  scanEmails();
 }
