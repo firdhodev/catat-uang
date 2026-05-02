@@ -123,7 +123,8 @@ INSERT INTO financial_platforms (name, type, email_sender, email_keywords, notes
   ('Jenius', 'bank', 'hello@jenius.com', ARRAY['Jenius', 'debit', 'credit', 'transfer'], 'Bank digital BTPN'),
   ('SeaBank', 'bank', 'noreply@seabank.co.id', ARRAY['SeaBank', 'debet', 'kredit', 'transfer'], 'Bank digital Sea'),
   ('Akulaku', 'paylater', 'notification@akulaku.com', ARRAY['Akulaku', 'cicilan', 'bayar', 'tagihan'], 'Platform paylater'),
-  ('Kredivo', 'paylater', 'noreply@kredivo.com', ARRAY['Kredivo', 'cicilan', 'bayar', 'tagihan'], 'Platform paylater')
+  ('Kredivo', 'paylater', 'noreply@kredivo.com', ARRAY['Kredivo', 'cicilan', 'bayar', 'tagihan'], 'Platform paylater'),
+  ('Krom Bank', 'bank', 'noreply@krom.id', ARRAY['Dana Diterima', 'Transaksi QRIS Berhasil', 'Kamu telah menerima dana', 'Kamu telah melakukan pembayaran QRIS', 'Jumlah', 'Merchant', 'Tim Krom', 'PT Krom Bank Indonesia', 'Tabungan Utama'], 'PT Krom Bank Indonesia Tbk - Digital Banking')
 ON CONFLICT DO NOTHING;
 
 -- ============================================
