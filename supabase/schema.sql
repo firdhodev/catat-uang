@@ -110,7 +110,7 @@ ON CONFLICT (name) DO NOTHING;
 -- SEED DATA: Platform Keuangan Populer Indonesia
 -- ============================================
 INSERT INTO financial_platforms (name, type, email_sender, email_keywords, notes) VALUES
-  ('BCA', 'bank', 'notifikasi@bca.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BCA'], 'Bank Central Asia'),
+  ('BCA', 'bank', 'bca@bca.co.id', ARRAY['Berhasil', 'Nominal', 'Tanggal Transaksi', 'Jenis Transfer', 'myBCA', 'fasilitas myBCA', 'PT Bank Central Asia', 'Tarik Tunai', 'Setor Tunai', 'IDR'], 'Bank Central Asia - myBCA Mobile Banking'),
   ('Mandiri', 'bank', 'notifikasi@bankmandiri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'Mandiri'], 'Bank Mandiri'),
   ('BNI', 'bank', 'notif@bni.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BNI'], 'Bank Negara Indonesia'),
   ('BRI', 'bank', 'info@bri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BRI'], 'Bank Rakyat Indonesia'),
