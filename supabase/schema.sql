@@ -112,7 +112,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO financial_platforms (name, type, email_sender, email_keywords, notes) VALUES
   ('BCA', 'bank', 'bca@bca.co.id', ARRAY['Berhasil', 'Nominal', 'Tanggal Transaksi', 'Jenis Transfer', 'myBCA', 'fasilitas myBCA', 'PT Bank Central Asia', 'Tarik Tunai', 'Setor Tunai', 'IDR'], 'Bank Central Asia - myBCA Mobile Banking'),
   ('Mandiri', 'bank', 'notifikasi@bankmandiri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'Mandiri'], 'Bank Mandiri'),
-  ('BNI', 'bank', 'notif@bni.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BNI'], 'Bank Negara Indonesia'),
+  ('BNI', 'bank', 'wondr@bni.co.id', ARRAY['Transaksi berhasil', 'wondr by BNI', 'wondr', 'Nominal', 'Detail transaksi', 'Tujuan', 'Sumber dana', 'PT Bank Negara Indonesia', 'BNI'], 'Bank Negara Indonesia - Wondr by BNI Digital Banking'),
   ('BRI', 'bank', 'info@bri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BRI'], 'Bank Rakyat Indonesia'),
   ('Bank BTN', 'bank', 'balebybtn@btn.co.id', ARRAY['Notifikasi Transaksi', 'Nominal Pembayaran', 'SUKSES', 'QR Payment', 'BTN Mobile', 'berhasil dilakukan'], 'Bank Tabungan Negara - Mobile Banking'),
   ('GoPay', 'ewallet', 'noreply@gojek.com', ARRAY['GoPay', 'bayar', 'terima', 'transfer'], 'Dompet digital Gojek'),
