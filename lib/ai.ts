@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { DEFAULT_CATEGORIES } from './categories';
 
 interface AIConfig {
   baseUrl: string;
@@ -24,30 +25,45 @@ async function getAIConfig(): Promise<AIConfig> {
   };
 }
 
-const EMAIL_PARSE_PROMPT = `Kamu adalah asisten parsing transaksi keuangan Indonesia.
-Analisa email notifikasi transaksi berikut dan ekstrak informasi dalam format JSON.
-
-INSTRUKSI:
-- Tentukan nominal transaksi (angka saja, tanpa titik/koma/Rp)
-- Tentukan jenis: "income" (masuk/terima/kredit) atau "expense" (keluar/bayar/debit)
-- Pilih kategori yang paling sesuai dari: Makanan & Minuman, Transport, Belanja, Tagihan & Utilitas, Kesehatan, Hiburan, Pendidikan, Investasi, Transfer Keluar, Transfer Masuk, Gaji, Freelance, Cashback & Reward, Lainnya
-- Buat deskripsi singkat dalam Bahasa Indonesia
-- Tentukan tanggal transaksi (format ISO 8601, gunakan tanggal hari ini jika tidak ada)
-- Berikan confidence score 0.0-1.0
-
-FORMAT RESPONSE (hanya JSON, tidak ada teks lain):
-{
-  "amount": 150000,
-  "type": "expense",
-  "category": "Makanan & Minuman",
-  "description": "Pembayaran di restoran via GoPay",
-  "transaction_date": "2024-01-15T12:30:00+07:00",
-  "confidence": 0.95
+// ============================================================
+// LOAD CATEGORIES FROM DB
+// ============================================================
+export interface CategoryConfig {
+  expense: string[];
+  income: string[];
 }
 
-EMAIL UNTUK DIPARSE:
-`;
 
+
+export async function getCategories(): Promise<CategoryConfig> {
+  try {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['categories_expense', 'categories_income']);
+
+    if (!data || data.length === 0) return DEFAULT_CATEGORIES;
+
+    const settings: Record<string, string> = {};
+    data.forEach((row) => { settings[row.key] = row.value; });
+
+    const expense = settings['categories_expense']
+      ? JSON.parse(settings['categories_expense'])
+      : DEFAULT_CATEGORIES.expense;
+
+    const income = settings['categories_income']
+      ? JSON.parse(settings['categories_income'])
+      : DEFAULT_CATEGORIES.income;
+
+    return { expense, income };
+  } catch {
+    return DEFAULT_CATEGORIES;
+  }
+}
+
+// ============================================================
+// AI CALL
+// ============================================================
 async function callAI(
   config: AIConfig,
   messages: { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] }[]
@@ -80,6 +96,9 @@ function extractJSON(content: string) {
   return JSON.parse(jsonMatch[0]);
 }
 
+// ============================================================
+// PARSE EMAIL
+// ============================================================
 export async function parseEmailWithAI(emailBody: string, subject?: string): Promise<{
   amount: number;
   type: 'income' | 'expense';
@@ -89,7 +108,36 @@ export async function parseEmailWithAI(emailBody: string, subject?: string): Pro
   confidence: number;
 } | null> {
   try {
-    const config = await getAIConfig();
+    const [config, categories] = await Promise.all([getAIConfig(), getCategories()]);
+
+    const allCategories = [...categories.expense, ...categories.income].join(', ');
+
+    const EMAIL_PARSE_PROMPT = `Kamu adalah asisten parsing transaksi keuangan Indonesia.
+Analisa email notifikasi transaksi berikut dan ekstrak informasi dalam format JSON.
+
+INSTRUKSI:
+- Tentukan nominal transaksi (angka saja, tanpa titik/koma/Rp)
+- Tentukan jenis: "income" (masuk/terima/kredit) atau "expense" (keluar/bayar/debit)
+- Pilih kategori yang paling sesuai dari daftar berikut: ${allCategories}
+- Kategori pemasukan (income): ${categories.income.join(', ')}
+- Kategori pengeluaran (expense): ${categories.expense.join(', ')}
+- Buat deskripsi singkat dalam Bahasa Indonesia
+- Tentukan tanggal transaksi (format ISO 8601, gunakan tanggal hari ini jika tidak ada)
+- Berikan confidence score 0.0-1.0
+
+FORMAT RESPONSE (hanya JSON, tidak ada teks lain):
+{
+  "amount": 150000,
+  "type": "expense",
+  "category": "Makanan & Minuman",
+  "description": "Pembayaran di restoran via GoPay",
+  "transaction_date": "2024-01-15T12:30:00+07:00",
+  "confidence": 0.95
+}
+
+EMAIL UNTUK DIPARSE:
+`;
+
     const prompt = EMAIL_PARSE_PROMPT +
       (subject ? `Subject: ${subject}\n\n` : '') +
       emailBody;
@@ -121,40 +169,6 @@ export async function parseEmailWithAI(emailBody: string, subject?: string): Pro
 // ============================================================
 // PARSE INPUT MANUAL (teks bebas + opsional gambar nota)
 // ============================================================
-const MANUAL_PARSE_PROMPT = `Kamu adalah asisten keuangan personal Indonesia.
-Parse input teks transaksi keuangan dan kembalikan HANYA JSON valid.
-
-ATURAN PARSING NOMINAL:
-- "rb", "ribu", "rbu" = × 1.000 (contoh: "15rb" = 15000, "15ribu" = 15000)
-- "jt", "juta" = × 1.000.000 (contoh: "1.5jt" = 1500000, "2juta" = 2000000)
-- "k" setelah angka = × 1.000 (contoh: "15k" = 15000)
-- "Rp", "rp" diikuti angka → parse nominal tersebut
-- Format 15.000 atau 15,000 → 15000
-
-ATURAN TIPE:
-- "expense": makan, beli, bayar, transfer keluar, kirim, belanja, bensin, parkir, dll
-- "income": terima, gaji, masuk, dapat, cashback, refund, dll
-
-KATEGORI (pilih satu):
-Makanan & Minuman, Transport, Belanja, Tagihan & Utilitas, Kesehatan, Hiburan, Pendidikan, Investasi, Transfer Keluar, Gaji, Freelance, Transfer Masuk, Cashback & Reward, Lainnya
-
-NORMALISASI DESKRIPSI:
-- Huruf kapital di awal setiap kata penting
-- Hilangkan singkatan tidak baku (ganti "warung" bukan "wrng", "makan" bukan "mkn")
-- Gunakan Bahasa Indonesia yang baik dan baku
-- Maksimal 60 karakter
-
-FORMAT RESPONSE (hanya JSON):
-{
-  "amount": 25000,
-  "type": "expense",
-  "category": "Makanan & Minuman",
-  "description": "Makan Siang di Warung Padang",
-  "platform": "GoPay",
-  "confidence": 0.92,
-  "notes": "Alasan singkat parsing"
-}`;
-
 export async function parseManualInputWithAI(
   text: string,
   imageBase64?: string,
@@ -169,7 +183,50 @@ export async function parseManualInputWithAI(
   notes: string;
 } | null> {
   try {
-    const config = await getAIConfig();
+    const [config, categories] = await Promise.all([getAIConfig(), getCategories()]);
+
+    const allCategories = [...categories.expense, ...categories.income].join(', ');
+
+    const MANUAL_PARSE_PROMPT = `Kamu adalah asisten keuangan personal Indonesia.
+Parse input teks transaksi keuangan dan kembalikan HANYA JSON valid.
+
+ATURAN PARSING NOMINAL:
+- "rb", "ribu", "rbu" = × 1.000 (contoh: "15rb" = 15000, "15ribu" = 15000)
+- "jt", "juta" = × 1.000.000 (contoh: "1.5jt" = 1500000, "2juta" = 2000000)
+- "k" setelah angka = × 1.000 (contoh: "15k" = 15000)
+- "Rp", "rp" diikuti angka → parse nominal tersebut
+- Format 15.000 atau 15,000 → 15000
+
+ATURAN TIPE:
+- "expense": makan, beli, bayar, transfer keluar, kirim, belanja, bensin, parkir, dll
+- "income": terima, gaji, masuk, dapat, cashback, refund, dll
+
+DAFTAR KATEGORI YANG TERSEDIA:
+Pengeluaran (expense): ${categories.expense.join(', ')}
+Pemasukan (income): ${categories.income.join(', ')}
+Semua kategori: ${allCategories}
+
+ATURAN KATEGORI:
+- Pilih HANYA dari daftar kategori di atas
+- Cocokkan kategori dengan tipe transaksi (expense/income)
+- Jika tidak cocok, gunakan kategori terakhir dari daftar yang sesuai (biasanya "Lainnya" atau "Pemasukan Lainnya")
+
+NORMALISASI DESKRIPSI:
+- Huruf kapital di awal setiap kata penting
+- Hilangkan singkatan tidak baku
+- Gunakan Bahasa Indonesia yang baik dan baku
+- Maksimal 60 karakter
+
+FORMAT RESPONSE (hanya JSON):
+{
+  "amount": 25000,
+  "type": "expense",
+  "category": "Makanan & Minuman",
+  "description": "Makan Siang di Warung Padang",
+  "platform": "GoPay",
+  "confidence": 0.92,
+  "notes": "Alasan singkat parsing"
+}`;
 
     type MessageContent = string | { type: string; text?: string; image_url?: { url: string } }[];
     type Message = { role: string; content: MessageContent };
@@ -178,7 +235,6 @@ export async function parseManualInputWithAI(
     ];
 
     if (imageBase64) {
-      // Mode vision — kirim gambar + teks
       messages.push({
         role: 'user',
         content: [
@@ -209,7 +265,7 @@ export async function parseManualInputWithAI(
     return {
       amount: Number(parsed.amount),
       type: (parsed.type === 'income' ? 'income' : 'expense') as 'income' | 'expense',
-      category: parsed.category || 'Lainnya',
+      category: parsed.category || (parsed.type === 'income' ? categories.income[categories.income.length - 1] : categories.expense[categories.expense.length - 1]),
       description: parsed.description || text.slice(0, 60),
       platform: parsed.platform || '',
       confidence: Math.min(1, Math.max(0, Number(parsed.confidence) || 0.7)),
@@ -220,4 +276,3 @@ export async function parseManualInputWithAI(
     return null;
   }
 }
-

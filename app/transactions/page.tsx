@@ -28,13 +28,8 @@ interface EditForm {
   is_verified: boolean;
 }
 
-const CATEGORIES_EXPENSE = [
-  'Makanan & Minuman', 'Transport', 'Belanja', 'Tagihan & Utilitas',
-  'Kesehatan', 'Hiburan', 'Pendidikan', 'Investasi', 'Transfer Keluar', 'Lainnya'
-];
-const CATEGORIES_INCOME = [
-  'Gaji', 'Freelance', 'Transfer Masuk', 'Cashback & Reward', 'Pemasukan Lainnya'
-];
+const DEFAULT_EXPENSE = ['Makanan & Minuman','Transport','Belanja','Tagihan & Utilitas','Kesehatan','Hiburan','Pendidikan','Investasi','Transfer Keluar','Lainnya'];
+const DEFAULT_INCOME = ['Gaji','Freelance','Transfer Masuk','Cashback & Reward','Pemasukan Lainnya'];
 
 function formatRupiah(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -44,9 +39,8 @@ function formatRupiah(amount: number) {
 }
 
 function formatDate(dateStr: string) {
-  try {
-    return format(parseISO(dateStr), 'dd MMM yyyy, HH:mm', { locale: idLocale });
-  } catch { return dateStr.slice(0, 16); }
+  try { return format(parseISO(dateStr), 'dd MMM yyyy, HH:mm', { locale: idLocale }); }
+  catch { return dateStr.slice(0, 16); }
 }
 
 export default function TransactionsPage() {
@@ -62,6 +56,8 @@ export default function TransactionsPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [search, setSearch] = useState('');
+  const [categoriesExpense, setCategoriesExpense] = useState<string[]>(DEFAULT_EXPENSE);
+  const [categoriesIncome, setCategoriesIncome] = useState<string[]>(DEFAULT_INCOME);
 
   const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type });
@@ -72,8 +68,7 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+        page: page.toString(), limit: '20',
         ...(filterType && { type: filterType }),
         ...(filterMonth && { month: filterMonth }),
       });
@@ -87,16 +82,19 @@ export default function TransactionsPage() {
 
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
+  useEffect(() => {
+    fetch('/api/categories').then(r => r.json()).then(d => {
+      if (d.expense) setCategoriesExpense(d.expense);
+      if (d.income) setCategoriesIncome(d.income);
+    }).catch(() => {});
+  }, []);
+
   const startEdit = (tx: Transaction) => {
     setEditingId(tx.id);
     setEditForm({
-      amount: tx.amount.toString(),
-      type: tx.type,
-      category: tx.category,
-      description: tx.description || '',
-      platform: tx.platform || '',
-      transaction_date: tx.transaction_date.slice(0, 16),
-      is_verified: tx.is_verified,
+      amount: tx.amount.toString(), type: tx.type, category: tx.category,
+      description: tx.description || '', platform: tx.platform || '',
+      transaction_date: tx.transaction_date.slice(0, 16), is_verified: tx.is_verified,
     });
   };
 
@@ -105,12 +103,8 @@ export default function TransactionsPage() {
     setSaving(true);
     try {
       const res = await fetch(`/api/transactions/${editingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editForm,
-          amount: parseFloat(editForm.amount),
-        }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...editForm, amount: parseFloat(editForm.amount) }),
       });
       if (!res.ok) throw new Error('Gagal menyimpan');
       showToast('✅ Transaksi berhasil diupdate');
@@ -130,8 +124,7 @@ export default function TransactionsPage() {
     } catch { showToast('❌ Gagal menghapus', 'error'); }
   };
 
-  const categories = editForm?.type === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
-
+  const categories = editForm?.type === 'income' ? categoriesIncome : categoriesExpense;
   const filtered = search
     ? transactions.filter(tx =>
         tx.description?.toLowerCase().includes(search.toLowerCase()) ||
@@ -142,14 +135,13 @@ export default function TransactionsPage() {
 
   return (
     <div className="page-container">
-      {/* Toast */}
       {toast && (
         <div className="toast-container">
           <div className={`toast toast-${toast.type}`}>{toast.msg}</div>
         </div>
       )}
 
-      {/* Delete Confirm Modal */}
+      {/* Delete Modal */}
       {deleteId && (
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>
           <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
@@ -157,7 +149,7 @@ export default function TransactionsPage() {
               <div className="modal-title">🗑️ Hapus Transaksi</div>
               <button className="modal-close" onClick={() => setDeleteId(null)}>×</button>
             </div>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+            <p style={{ color: '#555', marginBottom: 24, fontWeight: 600 }}>
               Apakah kamu yakin ingin menghapus transaksi ini? Tindakan ini tidak bisa dibatalkan.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -178,14 +170,14 @@ export default function TransactionsPage() {
             </div>
 
             <div className="type-toggle" style={{ marginBottom: 20 }}>
-              <button
-                className={`type-btn expense ${editForm.type === 'expense' ? 'active' : ''}`}
-                onClick={() => setEditForm({ ...editForm, type: 'expense', category: CATEGORIES_EXPENSE[0] })}
-              >💸 Pengeluaran</button>
-              <button
-                className={`type-btn income ${editForm.type === 'income' ? 'active' : ''}`}
-                onClick={() => setEditForm({ ...editForm, type: 'income', category: CATEGORIES_INCOME[0] })}
-              >💰 Pemasukan</button>
+              <button className={`type-btn expense ${editForm.type === 'expense' ? 'active' : ''}`}
+                onClick={() => setEditForm({ ...editForm, type: 'expense', category: categoriesExpense[0] ?? DEFAULT_EXPENSE[0] })}>
+                💸 Pengeluaran
+              </button>
+              <button className={`type-btn income ${editForm.type === 'income' ? 'active' : ''}`}
+                onClick={() => setEditForm({ ...editForm, type: 'income', category: categoriesIncome[0] ?? DEFAULT_INCOME[0] })}>
+                💰 Pemasukan
+              </button>
             </div>
 
             <div className="form-group">
@@ -225,8 +217,8 @@ export default function TransactionsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
               <input type="checkbox" id="verified-check" checked={editForm.is_verified}
                 onChange={e => setEditForm({ ...editForm, is_verified: e.target.checked })}
-                style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
-              <label htmlFor="verified-check" style={{ fontSize: 14, cursor: 'pointer' }}>
+                style={{ accentColor: '#0D0D0D', width: 16, height: 16 }} />
+              <label htmlFor="verified-check" style={{ fontSize: 14, cursor: 'pointer', fontWeight: 700 }}>
                 Tandai sebagai terverifikasi
               </label>
             </div>
@@ -248,34 +240,24 @@ export default function TransactionsPage() {
           <p className="page-subtitle">{total} transaksi ditemukan</p>
         </div>
         <div className="topbar-right">
-          {/* Search */}
           <div className="search-bar">
             <span className="search-icon">🔍</span>
-            <input
-              className="search-input"
-              placeholder="Cari transaksi..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <input className="search-input" placeholder="Cari transaksi..."
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-
-          {/* Filter Type */}
           <select className="form-select" style={{ width: 'auto', padding: '10px 14px' }}
             value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1); }}>
             <option value="">Semua Tipe</option>
             <option value="income">Pemasukan</option>
             <option value="expense">Pengeluaran</option>
           </select>
-
-          {/* Filter Month */}
           <input type="month" className="form-input" style={{ width: 'auto' }}
-            value={filterMonth}
-            onChange={e => { setFilterMonth(e.target.value); setPage(1); }} />
+            value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setPage(1); }} />
         </div>
       </div>
 
       {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ background: '#FAFAFA', border: '2px solid #0D0D0D', borderRadius: 4, boxShadow: '4px 4px 0px #0D0D0D', overflow: 'hidden' }}>
         {loading ? (
           <div className="loading"><div className="spinner" /> Memuat...</div>
         ) : filtered.length === 0 ? (
@@ -284,7 +266,7 @@ export default function TransactionsPage() {
             <div className="empty-state-title">Tidak ada transaksi</div>
           </div>
         ) : (
-          <div className="table-container" style={{ border: 'none' }}>
+          <div className="table-container" style={{ border: 'none', boxShadow: 'none' }}>
             <table className="table">
               <thead>
                 <tr>
@@ -301,20 +283,16 @@ export default function TransactionsPage() {
               <tbody>
                 {filtered.map(tx => (
                   <tr key={tx.id}>
-                    <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: '12px', color: '#666', whiteSpace: 'nowrap', fontWeight: 700 }}>
                       {formatDate(tx.transaction_date)}
                     </td>
                     <td style={{ maxWidth: 200 }}>
-                      <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {tx.description || '-'}
                       </div>
                     </td>
-                    <td>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{tx.category}</span>
-                    </td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {tx.platform || '-'}
-                    </td>
+                    <td><span style={{ fontSize: '13px', fontWeight: 600, color: '#555' }}>{tx.category}</span></td>
+                    <td style={{ fontSize: '12px', color: '#999', fontWeight: 600 }}>{tx.platform || '-'}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <span className={`amount amount-${tx.type}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
@@ -324,35 +302,31 @@ export default function TransactionsPage() {
                       {tx.source === 'email' && tx.ai_confidence !== undefined ? (
                         <div className="confidence-bar">
                           <div className="confidence-track">
-                            <div
-                              className="confidence-fill"
-                              style={{
-                                width: `${(tx.ai_confidence * 100).toFixed(0)}%`,
-                                background: tx.ai_confidence >= 0.8 ? 'var(--income)' : tx.ai_confidence >= 0.5 ? 'var(--warning)' : 'var(--expense)',
-                              }}
-                            />
+                            <div className="confidence-fill" style={{
+                              width: `${(tx.ai_confidence * 100).toFixed(0)}%`,
+                              background: tx.ai_confidence >= 0.8 ? '#00C853' : tx.ai_confidence >= 0.5 ? '#FFB800' : '#FF3B3B',
+                            }} />
                           </div>
                           <span className="confidence-text" style={{
-                            color: tx.ai_confidence >= 0.8 ? 'var(--income)' : tx.ai_confidence >= 0.5 ? 'var(--warning)' : 'var(--expense)',
+                            color: tx.ai_confidence >= 0.8 ? '#007A33' : tx.ai_confidence >= 0.5 ? '#AA8800' : '#FF3B3B',
                           }}>
                             {(tx.ai_confidence * 100).toFixed(0)}%
                           </span>
                         </div>
                       ) : (
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>—</span>
+                        <span style={{ fontSize: '12px', color: '#ccc', fontWeight: 700 }}>—</span>
                       )}
                     </td>
                     <td>
                       {tx.is_verified
                         ? <span className="badge badge-done">✓ Verified</span>
-                        : <span className="badge badge-pending">Review</span>
-                      }
+                        : <span className="badge badge-pending">Review</span>}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn-icon btn-sm" onClick={() => startEdit(tx)} title="Edit">✏️</button>
                         <button className="btn-icon btn-sm" onClick={() => setDeleteId(tx.id)} title="Hapus"
-                          style={{ color: 'var(--expense)' }}>🗑️</button>
+                          style={{ color: '#FF3B3B' }}>🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -362,11 +336,10 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        {/* Pagination */}
         {total > 20 && (
-          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <div style={{ padding: '16px 20px', borderTop: '2px solid #0D0D0D', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
             <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-            <span style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            <span style={{ padding: '6px 12px', fontSize: 13, fontWeight: 800, border: '2px solid #0D0D0D', borderRadius: 4, background: '#FFFBDB' }}>
               Hal {page} / {Math.ceil(total / 20)}
             </span>
             <button className="btn btn-secondary btn-sm" disabled={page * 20 >= total} onClick={() => setPage(p => p + 1)}>Next →</button>

@@ -33,25 +33,20 @@ interface Transaction {
 }
 
 const CATEGORY_COLORS = [
-  '#7c6aff', '#34d399', '#f87171', '#fbbf24', '#60a5fa',
-  '#a78bfa', '#f97316', '#2dd4bf', '#e879f9', '#94a3b8',
+  '#7B00FF', '#00C853', '#FF3B3B', '#FFE500', '#0066FF',
+  '#FF6B00', '#00BCD4', '#E91E63', '#4CAF50', '#9E9E9E',
 ];
 
 function formatRupiah(amount: number) {
   return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    style: 'currency', currency: 'IDR',
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
   }).format(amount);
 }
 
 function formatShortDate(dateStr: string) {
-  try {
-    return format(parseISO(dateStr), 'dd MMM', { locale: idLocale });
-  } catch {
-    return dateStr.slice(0, 10);
-  }
+  try { return format(parseISO(dateStr), 'dd MMM', { locale: idLocale }); }
+  catch { return dateStr.slice(0, 10); }
 }
 
 export default function DashboardPage() {
@@ -67,45 +62,40 @@ export default function DashboardPage() {
       const res = await fetch(`/api/stats?month=${month}`);
       const data = await res.json();
       setStats(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
   }, [month]);
 
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+  useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const handleProcessEmails = async () => {
     setProcessing(true);
     setProcessResult(null);
     try {
-      const res = await fetch('/api/process-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 10 }) });
+      const res = await fetch('/api/process-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 10 }),
+      });
       const data = await res.json();
       setProcessResult(`✅ Selesai: ${data.processed} berhasil, ${data.failed} gagal`);
       fetchStats();
     } catch {
       setProcessResult('❌ Gagal memproses email');
-    } finally {
-      setProcessing(false);
-    }
+    } finally { setProcessing(false); }
   };
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { color: string; name: string; value: number }[]; label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: '10px',
-          padding: '12px 16px',
-          fontSize: '13px',
+          background: '#fff', border: '2px solid #0D0D0D',
+          borderRadius: 4, padding: '12px 16px', fontSize: '13px',
+          boxShadow: '3px 3px 0px #0D0D0D',
         }}>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 6 }}>{label}</p>
+          <p style={{ color: '#666', marginBottom: 6, fontWeight: 700 }}>{label}</p>
           {payload.map((p, i) => (
-            <p key={i} style={{ color: p.color, fontWeight: 700 }}>
+            <p key={i} style={{ color: p.color, fontWeight: 800 }}>
               {p.name}: {formatRupiah(p.value)}
             </p>
           ))}
@@ -126,10 +116,7 @@ export default function DashboardPage() {
     );
   }
 
-  const chartData = stats?.byDay.map(d => ({
-    ...d,
-    date: formatShortDate(d.date),
-  })) || [];
+  const chartData = stats?.byDay.map(d => ({ ...d, date: formatShortDate(d.date) })) || [];
 
   return (
     <div className="page-container">
@@ -143,7 +130,7 @@ export default function DashboardPage() {
         </div>
         <div className="topbar-right">
           <div className="month-picker">
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📅</span>
+            <span style={{ fontSize: '13px' }}>📅</span>
             <input
               type="month"
               value={month}
@@ -161,11 +148,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Process result alert */}
+      {/* Process result */}
       {processResult && (
         <div className={`alert ${processResult.startsWith('✅') ? 'alert-success' : 'alert-error'}`}>
           {processResult}
-          <button onClick={() => setProcessResult(null)} style={{ marginLeft: 'auto', cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', fontSize: '16px' }}>×</button>
+          <button onClick={() => setProcessResult(null)} style={{ marginLeft: 'auto', cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', fontSize: '18px', fontWeight: 800 }}>×</button>
         </div>
       )}
 
@@ -173,7 +160,7 @@ export default function DashboardPage() {
       {(stats?.pendingEmails || 0) > 0 && (
         <div className="alert alert-warning" style={{ marginBottom: 24 }}>
           📬 Ada <strong>{stats?.pendingEmails}</strong> email transaksi yang belum diproses.
-          <Link href="/pending" style={{ marginLeft: 8, textDecoration: 'underline' }}>Lihat &rarr;</Link>
+          <Link href="/pending" style={{ marginLeft: 8, textDecoration: 'underline', fontWeight: 800 }}>Lihat →</Link>
         </div>
       )}
 
@@ -205,7 +192,6 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div className="charts-grid">
-        {/* Area Chart */}
         <div className="chart-card">
           <div className="chart-title">Tren Keuangan (30 Hari Terakhir)</div>
           <div className="chart-sub">Pemasukan vs Pengeluaran harian</div>
@@ -213,35 +199,25 @@ export default function DashboardPage() {
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
               <defs>
                 <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#00C853" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#00C853" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#FF3B3B" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#FF3B3B" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#555568', fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tick={{ fill: '#555568', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(0)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}rb` : v.toString()}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.07)" />
+              <XAxis dataKey="date" tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: '#888', fontSize: 10 }} tickLine={false} axisLine={false}
+                tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(0)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}rb` : v.toString()} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="income" name="Pemasukan" stroke="#34d399" fill="url(#incomeGrad)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="expense" name="Pengeluaran" stroke="#f87171" fill="url(#expenseGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="income" name="Pemasukan" stroke="#00C853" fill="url(#incomeGrad)" strokeWidth={2.5} dot={false} />
+              <Area type="monotone" dataKey="expense" name="Pengeluaran" stroke="#FF3B3B" fill="url(#expenseGrad)" strokeWidth={2.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Pie Chart */}
         <div className="chart-card">
           <div className="chart-title">Pengeluaran per Kategori</div>
           <div className="chart-sub">Bulan ini</div>
@@ -250,22 +226,16 @@ export default function DashboardPage() {
               <PieChart>
                 <Pie
                   data={stats?.byCategory?.slice(0, 8)}
-                  dataKey="amount"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={90}
-                  paddingAngle={3}
+                  dataKey="amount" nameKey="category"
+                  cx="50%" cy="50%"
+                  innerRadius={50} outerRadius={88} paddingAngle={3}
                 >
                   {stats?.byCategory?.slice(0, 8).map((_, i) => (
                     <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => typeof v === 'number' ? formatRupiah(v) : v} />
-                <Legend
-                  formatter={(v) => <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{v}</span>}
-                />
+                <Legend formatter={(v) => <span style={{ fontSize: '11px', color: '#666', fontWeight: 700 }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -278,22 +248,24 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Transactions */}
-      <div className="card">
-        <div className="section-header">
-          <div className="section-title">🕐 Transaksi Terbaru</div>
-          <Link href="/transactions" className="section-link">Lihat semua →</Link>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px' }}>
+          <div className="section-header">
+            <div className="section-title">🕐 Transaksi Terbaru</div>
+            <Link href="/transactions" className="section-link">Lihat semua →</Link>
+          </div>
         </div>
 
         {(stats?.recentTransactions?.length || 0) === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">💳</div>
             <div className="empty-state-title">Belum ada transaksi</div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: 8 }}>
+            <p style={{ fontSize: '13px', color: '#999', marginTop: 8, fontWeight: 600 }}>
               Tambah manual atau proses email untuk mulai
             </p>
           </div>
         ) : (
-          <div className="table-container" style={{ border: 'none' }}>
+          <div className="table-container" style={{ border: 'none', boxShadow: 'none' }}>
             <table className="table">
               <thead>
                 <tr>
@@ -308,20 +280,16 @@ export default function DashboardPage() {
               <tbody>
                 {stats?.recentTransactions.map(tx => (
                   <tr key={tx.id}>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                    <td style={{ color: '#666', fontSize: '12px', whiteSpace: 'nowrap', fontWeight: 700 }}>
                       {formatShortDate(tx.transaction_date)}
                     </td>
                     <td style={{ maxWidth: 200 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {tx.description || '-'}
                       </div>
                     </td>
-                    <td>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{tx.category}</span>
-                    </td>
-                    <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      {tx.platform || '-'}
-                    </td>
+                    <td><span style={{ fontSize: '13px', fontWeight: 600, color: '#555' }}>{tx.category}</span></td>
+                    <td style={{ fontSize: '12px', color: '#999', fontWeight: 600 }}>{tx.platform || '-'}</td>
                     <td>
                       <span className={`amount amount-${tx.type}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
@@ -330,8 +298,7 @@ export default function DashboardPage() {
                     <td>
                       {tx.is_verified
                         ? <span className="badge badge-done">✓ Verified</span>
-                        : <span className="badge badge-pending">Review</span>
-                      }
+                        : <span className="badge badge-pending">Review</span>}
                     </td>
                   </tr>
                 ))}
