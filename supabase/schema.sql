@@ -114,6 +114,7 @@ INSERT INTO financial_platforms (name, type, email_sender, email_keywords, notes
   ('Mandiri', 'bank', 'notifikasi@bankmandiri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'Mandiri'], 'Bank Mandiri'),
   ('BNI', 'bank', 'notif@bni.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BNI'], 'Bank Negara Indonesia'),
   ('BRI', 'bank', 'info@bri.co.id', ARRAY['Debit', 'Kredit', 'Transfer', 'BRI'], 'Bank Rakyat Indonesia'),
+  ('Bank BTN', 'bank', 'balebybtn@btn.co.id', ARRAY['Notifikasi Transaksi', 'Nominal Pembayaran', 'SUKSES', 'QR Payment', 'BTN Mobile', 'berhasil dilakukan'], 'Bank Tabungan Negara - Mobile Banking'),
   ('GoPay', 'ewallet', 'noreply@gojek.com', ARRAY['GoPay', 'bayar', 'terima', 'transfer'], 'Dompet digital Gojek'),
   ('OVO', 'ewallet', 'no-reply@ovo.id', ARRAY['OVO', 'bayar', 'transfer', 'top up'], 'Dompet digital OVO'),
   ('DANA', 'ewallet', 'noreply@dana.id', ARRAY['DANA', 'bayar', 'transfer', 'top up'], 'Dompet digital DANA'),
