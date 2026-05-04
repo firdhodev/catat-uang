@@ -13,9 +13,10 @@ const PLATFORM_EXAMPLES = {
 };
 
 const AI_PRESETS = [
-  { label: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama', model: 'llama3.2:3b', desc: 'Development lokal' },
-  { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', model: 'meta-llama/llama-3.1-8b-instruct', desc: 'Production di Vercel' },
-  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini', desc: 'OpenAI API' },
+  { label: '⚡ Gemini Flash (Free)', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', model: 'google/gemini-2.0-flash-001', desc: 'OpenRouter · Gratis & cepat ✨' },
+  { label: '🦙 Llama 3.1 (Free)', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', model: 'meta-llama/llama-3.1-8b-instruct:free', desc: 'OpenRouter · Gratis' },
+  { label: '💎 GPT-4o Mini', baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini', desc: 'OpenAI API · Berbayar' },
+  { label: '🏠 Ollama (Local)', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama', model: 'llama3.2:3b', desc: 'Development lokal saja' },
 ];
 
 const DEFAULT_EXPENSE = ['Makanan & Minuman','Transport','Belanja','Tagihan & Utilitas','Kesehatan','Hiburan','Pendidikan','Investasi','Transfer Keluar','Lainnya'];
@@ -197,15 +198,18 @@ export default function SettingsPage() {
             <div style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:24,alignItems:'start'}}>
               <div className="card">
                 <div style={{fontWeight:800,fontSize:15,marginBottom:20,textTransform:'uppercase'}}>🤖 Konfigurasi AI API</div>
+                <div className="alert alert-success" style={{marginBottom:20,fontSize:13}}>
+                  🎉 <strong>Simpan di sini = langsung aktif!</strong> Tidak perlu set environment variable di Vercel. Pengaturan ini tersimpan di Supabase dan otomatis digunakan oleh semua fitur AI.
+                </div>
                 <div className="form-group"><label className="form-label">AI Base URL</label>
-                  <input className="form-input" type="text" value={settings.ai_base_url||''} onChange={e=>setSettings(s=>({...s,ai_base_url:e.target.value}))} placeholder="http://localhost:11434/v1" id="input-ai-url"/>
-                  <div className="form-hint">Ollama: <code>http://localhost:11434/v1</code> | OpenRouter: <code>https://openrouter.ai/api/v1</code></div></div>
+                  <input className="form-input" type="text" value={settings.ai_base_url||''} onChange={e=>setSettings(s=>({...s,ai_base_url:e.target.value}))} placeholder="https://openrouter.ai/api/v1" id="input-ai-url"/>
+                  <div className="form-hint">OpenRouter: <code>https://openrouter.ai/api/v1</code> | Ollama lokal: <code>http://localhost:11434/v1</code></div></div>
                 <div className="form-group"><label className="form-label">API Key</label>
-                  <input className="form-input" type="password" value={settings.ai_api_key||''} onChange={e=>setSettings(s=>({...s,ai_api_key:e.target.value}))} placeholder="ollama / sk-or-xxx" id="input-ai-key"/>
-                  <div className="form-hint">Untuk Ollama lokal isi &quot;ollama&quot; atau kosongkan</div></div>
+                  <input className="form-input" type="password" value={settings.ai_api_key||''} onChange={e=>setSettings(s=>({...s,ai_api_key:e.target.value}))} placeholder="sk-or-xxxxxxxxxxxxxxxx" id="input-ai-key"/>
+                  <div className="form-hint">Dapatkan API key gratis di <strong>openrouter.ai/keys</strong> (tidak perlu kartu kredit untuk model gratis)</div></div>
                 <div className="form-group"><label className="form-label">Model</label>
-                  <input className="form-input" type="text" value={settings.ai_model||''} onChange={e=>setSettings(s=>({...s,ai_model:e.target.value}))} placeholder="llama3.2:3b" id="input-ai-model"/>
-                  <div className="form-hint">Ollama: <code>llama3.2:3b</code> | OpenRouter: <code>meta-llama/llama-3.1-8b-instruct</code></div></div>
+                  <input className="form-input" type="text" value={settings.ai_model||''} onChange={e=>setSettings(s=>({...s,ai_model:e.target.value}))} placeholder="google/gemini-2.0-flash-001" id="input-ai-model"/>
+                  <div className="form-hint">Klik preset di kanan untuk otomatis mengisi model yang tersedia</div></div>
                 {testResult&&<div className={`alert ${testResult.startsWith('✅')?'alert-success':'alert-warning'}`} style={{marginBottom:16}}>{testResult}</div>}
                 <div style={{display:'flex',gap:12}}>
                   <button className="btn btn-secondary" onClick={handleTestAI} disabled={testingAI} id="btn-test-ai">
@@ -226,8 +230,8 @@ export default function SettingsPage() {
                       <div style={{fontSize:11,color:'#0066FF',marginTop:4,fontFamily:'monospace',fontWeight:700}}>{p.model}</div>
                     </div>))}
                 </div>
-                <div className="alert alert-info" style={{marginTop:16}}>
-                  <div><strong>💡 Tips:</strong><br/>Gunakan <strong>Ollama</strong> saat development, ganti ke <strong>OpenRouter</strong> saat deploy.</div></div>
+                <div className="alert alert-warning" style={{marginTop:16,fontSize:12}}>
+                  <div><strong>🔑 Cara dapat API Key OpenRouter:</strong><br/>1. Daftar di <strong>openrouter.ai</strong><br/>2. Buka menu <strong>Keys</strong><br/>3. Klik <strong>Create Key</strong><br/>4. Copy dan paste di kolom API Key di atas<br/><br/>Model dengan tanda <em>":free"</em> atau tanpa quota = <strong>GRATIS</strong></div></div>
               </div>
             </div>
           )}
