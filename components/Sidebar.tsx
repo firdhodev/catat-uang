@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const navItems = [
+  { href: '/chat', label: 'Chat AI', icon: '💬', section: 'main' },
   { href: '/', label: 'Dashboard', icon: '📊', section: 'main' },
   { href: '/transactions', label: 'Transaksi', icon: '💳', section: 'main' },
   { href: '/manual', label: 'Input Manual', icon: '✍️', section: 'main' },
