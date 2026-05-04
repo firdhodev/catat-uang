@@ -71,46 +71,33 @@ export async function POST(request: NextRequest) {
 
     const formatRp = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
-    const SYSTEM_PROMPT = `Kamu adalah asisten keuangan pribadi bernama "CuanBot" yang berjalan di aplikasi CatatUang.
-Kamu berbicara dalam Bahasa Indonesia yang santai, singkat, dan ramah (boleh pakai emoji).
+    const SYSTEM_PROMPT = `Kamu adalah asisten keuangan pribadi bernama "CuanBot".
+Kamu WAJIB selalu merespons dalam format JSON murni. JANGAN gunakan markdown, code block, atau teks lain di luar JSON.
 
 KONTEKS KEUANGAN BULAN INI (${thisMonth}):
 - Pemasukan: ${formatRp(totalIncome)}
-- Pengeluaran: ${formatRp(totalExpense)}  
+- Pengeluaran: ${formatRp(totalExpense)}
 - Saldo bersih: ${formatRp(balance)}
 
-KEMAMPUANMU:
-1. Mencatat transaksi dari chat natural language (contoh: "makan siang 35rb", "terima gaji 5jt")
-2. Menjawab pertanyaan tentang keuangan
-3. Memberikan tips keuangan
-4. Menampilkan ringkasan saldo jika ditanya
+ATURAN NOMINAL:
+- "rb", "ribu", "k" = × 1.000 (contoh: 15rb = 15000, 3jt 900rb = 3900000)
+- "jt", "juta" = × 1.000.000 (contoh: 1.5jt = 1500000)
 
-ATURAN PARSING TRANSAKSI:
-- "rb", "ribu", "k" = × 1.000 (15rb = 15000)
-- "jt", "juta" = × 1.000.000 (1.5jt = 1500000)
-- Jika pesan mengandung transaksi, ekstrak dan kembalikan di field "transaction"
-- Kategori pengeluaran: ${categories.expense.join(', ')}
-- Kategori pemasukan: ${categories.income.join(', ')}
+KATEGORI PENGELUARAN: ${categories.expense.join(', ')}
+KATEGORI PEMASUKAN: ${categories.income.join(', ')}
 
-FORMAT RESPONSE (JSON):
-{
-  "reply": "Teks balasan untuk user (friendly, singkat, pakai emoji)",
-  "transaction": {
-    "amount": 35000,
-    "type": "expense",
-    "category": "Makanan & Minuman",
-    "description": "Makan Siang",
-    "platform": ""
-  }
-}
+WAJIB RETURN JSON SEPERTI INI (TIDAK BOLEH ADA TEKS LAIN):
+{"reply":"Pesan ramah ke user pakai emoji","transaction":{"amount":35000,"type":"expense","category":"Makanan & Minuman","description":"Makan Siang","platform":""}}
 
-Jika TIDAK ada transaksi, kembalikan:
-{
-  "reply": "Teks balasan",
-  "transaction": null
-}
+JIKA TIDAK ADA TRANSAKSI:
+{"reply":"Pesan ramah ke user","transaction":null}
 
-JANGAN pernah balas dengan teks biasa, SELALU format JSON valid.`;
+ATURAN PENTING:
+- type HARUS "income" atau "expense" (tidak boleh lain)
+- amount HARUS angka murni tanpa titik/koma (contoh: 3900000 bukan 3.900.000)
+- JANGAN gunakan markdown \`\`\`json atau \`\`\` apapun
+- Output HARUS dimulai dengan { dan diakhiri dengan }
+- reply gunakan Bahasa Indonesia santai dan ramah`;
 
     type MessageContent = string | { type: string; text?: string; image_url?: { url: string } }[];
     type Message = { role: string; content: MessageContent };
@@ -143,8 +130,9 @@ JANGAN pernah balas dengan teks biasa, SELALU format JSON valid.`;
       body: JSON.stringify({
         model: config.model,
         messages,
-        temperature: 0.3,
-        max_tokens: 500,
+        temperature: 0.1,
+        max_tokens: 800,
+        response_format: { type: 'json_object' }, // paksa AI return JSON murni
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -157,20 +145,61 @@ JANGAN pernah balas dengan teks biasa, SELALU format JSON valid.`;
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '{"reply":"Maaf, AI tidak merespons.","transaction":null}';
 
-    // Parse JSON dari AI
+    console.log('[Chat API] Raw AI content:', rawContent.slice(0, 300));
+
+    // ===== ROBUST JSON PARSING =====
     let parsed: { reply: string; transaction: null | { amount: number; type: string; category: string; description: string; platform: string } };
+    
+    function extractAndParseJSON(text: string) {
+      // 1. Bersihkan markdown code block (```json ... ```)
+      let cleaned = text
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
+      // 2. Cari JSON object: dari { pertama hingga } terakhir
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonStr = cleaned.slice(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonStr);
+      }
+      
+      // 3. Coba parse langsung
+      return JSON.parse(cleaned);
+    }
+
     try {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
-    } catch {
-      parsed = { reply: rawContent, transaction: null };
+      parsed = extractAndParseJSON(rawContent);
+      // Validasi field wajib ada
+      if (typeof parsed.reply !== 'string') {
+        parsed.reply = rawContent;
+      }
+    } catch (parseErr) {
+      console.error('[Chat API] JSON parse failed:', parseErr);
+      // Fallback: tampilkan pesan ramah, bukan raw JSON
+      parsed = { 
+        reply: '🤔 Maaf, saya sedang mengalami masalah teknis. Coba kirim pesan lagi ya!', 
+        transaction: null 
+      };
+    }
+
+    // Pastikan reply tidak mengandung raw JSON
+    if (parsed.reply && (parsed.reply.startsWith('{') || parsed.reply.includes('"transaction":'))) {
+      try {
+        const inner = extractAndParseJSON(parsed.reply);
+        if (inner.reply) parsed.reply = inner.reply;
+        if (inner.transaction && !parsed.transaction) parsed.transaction = inner.transaction;
+      } catch { /* ignore */ }
     }
 
     // Simpan transaksi ke Supabase jika ada
     let savedTransaction = null;
-    if (parsed.transaction && parsed.transaction.amount > 0) {
+    if (parsed.transaction && Number(parsed.transaction.amount) > 0) {
       const tx = parsed.transaction;
-      const { data: insertedTx } = await supabase
+      const { data: insertedTx, error: txError } = await supabase
         .from('transactions')
         .insert({
           amount: Number(tx.amount),
@@ -185,16 +214,24 @@ JANGAN pernah balas dengan teks biasa, SELALU format JSON valid.`;
         })
         .select()
         .single();
-      savedTransaction = insertedTx;
+
+      if (txError) {
+        console.error('[Chat API] Transaction save error:', txError.message);
+      } else {
+        savedTransaction = insertedTx;
+        console.log('[Chat API] Transaction saved:', savedTransaction?.id, tx.type, tx.amount);
+      }
     }
 
-    // Simpan balasan AI ke DB
-    await supabase.from('chat_messages').insert({
-      role: 'assistant',
-      content: parsed.reply,
-      transaction_id: savedTransaction?.id || null,
-      created_at: new Date().toISOString(),
-    });
+    // Simpan balasan AI ke DB (opsional, gagal pun tidak apa-apa)
+    try {
+      await supabase.from('chat_messages').insert({
+        role: 'assistant',
+        content: parsed.reply,
+        transaction_id: savedTransaction?.id || null,
+        created_at: new Date().toISOString(),
+      });
+    } catch { /* chat_messages table mungkin belum ada */ }
 
     return NextResponse.json({
       reply: parsed.reply,
